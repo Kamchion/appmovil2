@@ -1,0 +1,280 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
+} from 'react-native';
+import { getDatabase } from '../database/db';
+import { Product } from '../types';
+import { syncCatalog, checkConnection } from '../services/sync';
+import { Image } from 'react-native';
+import { getCachedImagePath } from '../services/imageCache';
+
+interface CatalogScreenProps {
+  navigation: any;
+}
+
+export default function CatalogScreen({ navigation }: CatalogScreenProps) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
+
+  useEffect(() => {
+    loadProducts();
+    checkConnectionStatus();
+  }, []);
+
+  const checkConnectionStatus = async () => {
+    const online = await checkConnection();
+    setIsOnline(online);
+  };
+
+  const loadProducts = async () => {
+    try {
+      const db = getDatabase();
+      const result = await db.getAllAsync<Product>(
+        'SELECT * FROM products ORDER BY name ASC'
+      );
+      setProducts(result);
+    } catch (error) {
+      console.error('Error al cargar productos:', error);
+      Alert.alert('Error', 'No se pudieron cargar los productos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setRefreshing(true);
+    
+    const result = await syncCatalog((message) => {
+      console.log('Sync progress:', message);
+    });
+
+    if (result.success) {
+      Alert.alert('Éxito', result.message);
+      await loadProducts();
+    } else {
+      Alert.alert('Error', result.message);
+    }
+
+    await checkConnectionStatus();
+    setRefreshing(false);
+  };
+
+  const renderProduct = ({ item }: { item: Product }) => (
+    <TouchableOpacity
+      style={styles.productCard}
+      onPress={() => navigation.navigate('ProductDetail', { product: item })}
+    >
+      <View style={styles.productInfo}>
+        <Text style={styles.productName}>{item.name}</Text>
+        <Text style={styles.productSku}>SKU: {item.sku}</Text>
+        <Text style={styles.productCategory}>{item.category || 'Sin categoría'}</Text>
+      </View>
+      <View style={styles.productPricing}>
+        <Text style={styles.productPrice}>${item.price}</Text>
+        <Text style={styles.productStock}>Stock: {item.stock}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={styles.loadingText}>Cargando catálogo...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>Catálogo</Text>
+          <Text style={styles.headerSubtitle}>
+            {products.length} productos disponibles
+          </Text>
+        </View>
+        <View style={[styles.statusBadge, isOnline ? styles.onlineBadge : styles.offlineBadge]}>
+          <Text style={styles.statusText}>
+            {isOnline ? '🌐 Online' : '📱 Offline'}
+          </Text>
+        </View>
+      </View>
+
+      {products.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No hay productos</Text>
+          <Text style={styles.emptySubtext}>
+            {isOnline
+              ? 'Desliza hacia abajo para sincronizar'
+              : 'Conéctate a internet para descargar el catálogo'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={products}
+          renderItem={renderProduct}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleSync}
+              colors={['#2563eb']}
+            />
+          }
+        />
+      )}
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('Cart')}
+      >
+        <Text style={styles.fabText}>🛒</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#64748b',
+  },
+  header: {
+    backgroundColor: '#fff',
+    padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  onlineBadge: {
+    backgroundColor: '#dcfce7',
+  },
+  offlineBadge: {
+    backgroundColor: '#fee2e2',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  listContainer: {
+    padding: 16,
+  },
+  productCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  productSku: {
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 2,
+  },
+  productCategory: {
+    fontSize: 12,
+    color: '#2563eb',
+  },
+  productPricing: {
+    alignItems: 'flex-end',
+  },
+  productPrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2563eb',
+    marginBottom: 4,
+  },
+  productStock: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#2563eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabText: {
+    fontSize: 28,
+  },
+});
