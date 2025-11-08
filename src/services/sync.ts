@@ -190,6 +190,8 @@ export async function syncCatalog(
     }
 
     // Sincronizar historial de pedidos
+    // TODO: Implementar endpoint getOrderHistory en el backend
+    /*
     onProgress?.('Sincronizando historial de pedidos...');
     try {
       const historyResponse = await getOrderHistory();
@@ -246,6 +248,7 @@ export async function syncCatalog(
       console.warn('⚠️ Error al sincronizar historial:', historyError);
       // No fallar la sincronización completa si falla el historial
     }
+    */
 
     return {
       success: true,
