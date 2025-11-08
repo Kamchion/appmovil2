@@ -2,7 +2,7 @@ import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDatabase } from '../database/db';
 import { getCatalog, uploadPendingOrders, getChanges, getAssignedClients } from './api';
-import { getOrderHistory } from './api-order-history';
+import { getOrders } from './api-orders';
 import { Product, PendingOrder, PendingOrderItem } from '../types';
 import { cacheMultipleImages } from './imageCache';
 import { API_BASE_URL } from './api';
@@ -190,11 +190,13 @@ export async function syncCatalog(
     }
 
     // Sincronizar historial de pedidos
-    // TODO: Implementar endpoint getOrderHistory en el backend
-    /*
     onProgress?.('Sincronizando historial de pedidos...');
     try {
-      const historyResponse = await getOrderHistory();
+      const token = await getAuthToken();
+      if (!token) {
+        throw new Error('No hay token de autenticación');
+      }
+      const historyResponse = await getOrders(token);
       if (historyResponse.success && historyResponse.orders) {
         for (const order of historyResponse.orders) {
           // Insertar pedido en historial
@@ -248,7 +250,6 @@ export async function syncCatalog(
       console.warn('⚠️ Error al sincronizar historial:', historyError);
       // No fallar la sincronización completa si falla el historial
     }
-    */
 
     return {
       success: true,
