@@ -139,6 +139,43 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
+    // Crear tabla de historial de pedidos (pedidos ya sincronizados del servidor)
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS order_history (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        clientId TEXT,
+        orderNumber TEXT,
+        status TEXT,
+        subtotal TEXT,
+        tax TEXT,
+        total TEXT,
+        notes TEXT,
+        customerName TEXT,
+        customerContact TEXT,
+        customerNote TEXT,
+        createdAt TEXT,
+        updatedAt TEXT,
+        syncedAt TEXT
+      );
+    `);
+
+    // Crear tabla de items de historial de pedidos
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS order_history_items (
+        id TEXT PRIMARY KEY,
+        orderId TEXT NOT NULL,
+        productId TEXT,
+        productName TEXT,
+        quantity INTEGER,
+        pricePerUnit TEXT,
+        subtotal TEXT,
+        customText TEXT,
+        customSelect TEXT,
+        FOREIGN KEY (orderId) REFERENCES order_history(id) ON DELETE CASCADE
+      );
+    `);
+
     // Crear tabla de configuración
     await db.execAsync(`
       CREATE TABLE IF NOT EXISTS config (
@@ -158,6 +195,9 @@ export async function initDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_pending_orders_synced ON pending_orders(synced);
       CREATE INDEX IF NOT EXISTS idx_pending_orders_client ON pending_orders(clientId);
       CREATE INDEX IF NOT EXISTS idx_pricing_product ON pricing_by_type(productId);
+      CREATE INDEX IF NOT EXISTS idx_order_history_client ON order_history(clientId);
+      CREATE INDEX IF NOT EXISTS idx_order_history_user ON order_history(userId);
+      CREATE INDEX IF NOT EXISTS idx_order_history_status ON order_history(status);
     `);
 
     // Guardar versión de la base de datos

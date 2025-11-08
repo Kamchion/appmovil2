@@ -106,8 +106,11 @@ export default function PedidosScreen({ navigation }: any) {
     
     setShowClientDialog(false);
     
-    // Navegar al catálogo
-    navigation.navigate('CatalogTab', { clientId: client.id });
+    // Navegar al catálogo con el cliente seleccionado
+    navigation.navigate('CatalogTabs', { 
+      screen: 'CatalogTab',
+      params: { clientId: client.id }
+    });
     
     Alert.alert(
       'Cliente seleccionado',

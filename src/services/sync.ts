@@ -2,6 +2,7 @@ import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDatabase } from '../database/db';
 import { getCatalog, uploadPendingOrders, getChanges, getAssignedClients } from './api';
+import { getOrderHistory } from './api-order-history';
 import { Product, PendingOrder, PendingOrderItem } from '../types';
 import { cacheMultipleImages } from './imageCache';
 import { API_BASE_URL } from './api';
@@ -186,6 +187,64 @@ export async function syncCatalog(
     } catch (clientError) {
       console.warn('⚠️ Error al sincronizar clientes:', clientError);
       // No fallar la sincronización completa si falla la sincronización de clientes
+    }
+
+    // Sincronizar historial de pedidos
+    onProgress?.('Sincronizando historial de pedidos...');
+    try {
+      const historyResponse = await getOrderHistory();
+      if (historyResponse.success && historyResponse.orders) {
+        for (const order of historyResponse.orders) {
+          // Insertar pedido en historial
+          await db.runAsync(
+            `INSERT OR REPLACE INTO order_history 
+             (id, userId, clientId, orderNumber, status, subtotal, tax, total, notes, 
+              customerName, customerContact, customerNote, createdAt, updatedAt, syncedAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              order.id,
+              order.userId,
+              order.clientId,
+              order.orderNumber,
+              order.status,
+              order.subtotal,
+              order.tax,
+              order.total,
+              order.notes || null,
+              order.customerName || null,
+              order.customerContact || null,
+              order.customerNote || null,
+              order.createdAt,
+              order.updatedAt,
+              now,
+            ]
+          );
+
+          // Insertar items del pedido
+          for (const item of order.items) {
+            await db.runAsync(
+              `INSERT OR REPLACE INTO order_history_items 
+               (id, orderId, productId, productName, quantity, pricePerUnit, subtotal, customText, customSelect)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                item.id,
+                order.id,
+                item.productId,
+                item.productName,
+                item.quantity,
+                item.pricePerUnit,
+                item.subtotal,
+                item.customText || null,
+                item.customSelect || null,
+              ]
+            );
+          }
+        }
+        console.log(`✅ ${historyResponse.orders.length} pedidos del historial sincronizados`);
+      }
+    } catch (historyError) {
+      console.warn('⚠️ Error al sincronizar historial:', historyError);
+      // No fallar la sincronización completa si falla el historial
     }
 
     return {
