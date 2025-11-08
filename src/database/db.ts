@@ -338,6 +338,22 @@ async function migrateDatabase(database: SQLite.SQLiteDatabase): Promise<void> {
           // La columna ya existe, ignorar
         }
 
+        try {
+          await database.execAsync(`
+            ALTER TABLE clients ADD COLUMN modifiedAt TEXT;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        try {
+          await database.execAsync(`
+            ALTER TABLE clients ADD COLUMN needsSync INTEGER DEFAULT 0;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
         // Agregar columnas a products si no existen
         try {
           await database.execAsync(`
